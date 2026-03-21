@@ -1,4 +1,3 @@
-cat > roles/common/tasks/main.yml << 'EOF'
 ---
 - name: Update apt cache
   ansible.builtin.apt:
@@ -52,4 +51,3 @@ cat > roles/common/tasks/main.yml << 'EOF'
 - name: Print common role completed
   ansible.builtin.debug:
     msg: "✅ Common configuration completed on {{ inventory_hostname }}"
-EOF
