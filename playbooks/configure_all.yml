@@ -1,4 +1,3 @@
-cat > playbooks/configure_all.yml << 'EOF'
 ---
 - name: Full Server Configuration — DevOps Project 3
   hosts: webservers
@@ -50,4 +49,3 @@ cat > playbooks/configure_all.yml << 'EOF'
           - "Docker   : Running"
           - "Security : UFW + fail2ban active"
           - "============================================"
-EOF
