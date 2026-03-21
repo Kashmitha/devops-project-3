@@ -26,7 +26,7 @@
     proto: tcp
   become: true
 
-- name: Allow App Port through UFW
+- name: Allow app port through UFW
   community.general.ufw:
     rule: allow
     port: "{{ app_port }}"
@@ -45,19 +45,19 @@
     dest: /etc/fail2ban/jail.local
     content: |
       [DEFAULT]
-      bantiime = 3600
+      bantime  = 3600
       findtime = 600
       maxretry = 3
 
       [sshd]
       enabled = true
-      port = ssh
+      port    = ssh
       logpath = %(sshd_log)s
       backend = %(syslog_backend)s
     mode: '0644'
   become: true
   notify: Restart fail2ban
-    
+
 - name: Disable root SSH login
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
