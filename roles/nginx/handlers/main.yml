@@ -2,11 +2,11 @@
 - name: Reload Nginx
   ansible.builtin.service:
     name: nginx
-    state: reloaded 
+    state: reloaded
   become: true
 
 - name: Restart Nginx
   ansible.builtin.service:
     name: nginx
-    state: restarted 
+    state: restarted
   become: true
