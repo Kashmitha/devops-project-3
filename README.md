@@ -1,5 +1,7 @@
 # DevOps Project 3 — Ansible Configuration Management on Azure
 
+![Ansible CI](https://github.com/Kashmitha/devops-project-3/actions/workflows/ansible.yml/badge.svg)
+
 ## Overview
 Automated configuration management of Azure Linux VMs using Ansible Core 2.20
 with role-based playbook architecture, dynamic inventory, and security hardening.
