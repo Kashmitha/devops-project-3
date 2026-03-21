@@ -1,0 +1,10 @@
+---
+ansible_user: azureuser
+ansible_ssh_private_key_file: ~/.ssh/ansible_project3
+ansible_python_interpreter: /usr/bin/python3
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+# App configuration
+app_name: devops-flask-app
+app_port: 5000
+app_version: "1.0.0"

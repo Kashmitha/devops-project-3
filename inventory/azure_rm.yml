@@ -1,0 +1,27 @@
+
+plugin: azure.azcollection.azure_rm
+
+
+
+include_vm_resource_groups:
+
+  - devops-project3-rg
+
+
+
+auth_source: env
+
+
+
+plain_host_vars: true
+
+
+
+keyed_groups:
+
+  - prefix: ""
+
+    key: tags.Role | default("ungrouped")
+
+    separator: ""
+

@@ -1,0 +1,52 @@
+---
+- name: Full Server Configuration — DevOps Project 3
+  hosts: webserver
+  gather_facts: true
+  become: true
+
+  pre_tasks:
+    - name: Print target host info
+      ansible.builtin.debug:
+        msg:
+          - "Configuring host : {{ inventory_hostname }}"
+          - "OS               : {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Architecture     : {{ ansible_architecture }}"
+          - "Python           : {{ ansible_python_version }}"
+
+  roles:
+    - common
+    - security
+    - docker
+    - nginx
+
+  post_tasks:
+    - name: Verify Nginx is running
+      ansible.builtin.service_facts:
+
+    - name: Assert Nginx service is active
+      ansible.builtin.assert:
+        that: 
+          - "'nginx' in services"
+          - "services['nginx'].state == 'running'"
+        success_msg: "✅ Nginx is running"
+        fail_msg: "❌ Nginx is NOT running — check the logs"
+    
+    - name: Verify Docker is running
+      ansible.builtin.assert:
+        that:
+          - "'docker' in services"
+          - "services['docker'].state == 'running'"
+        success_msg: "✅ Docker is running"
+        fail_msg: "❌ Docker is NOT running"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "============================================"
+          - "✅ Server configuration complete!"
+          - "Host     : {{ inventory_hostname }}"
+          - "Nginx    : Running on port 80"
+          - "Docker   : Running"
+          - "Security : UFW + fail2ban active"
+          - "============================================"
+

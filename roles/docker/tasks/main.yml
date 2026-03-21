@@ -1,0 +1,72 @@
+---
+- name: Remove old Docker packages if present
+  ansible.builtin.apt:
+    name:
+      - docker
+      - docker-engine
+      - docker.io
+      - containerd
+      - runc
+    state: absent
+  become: true
+  ignore_errors: true
+
+- name: Add Docker GPG key
+  ansible.builtin.shell: |
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+    gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/docker-archive-keyring.gpg
+  become: true
+
+- name: Add Docker APT repository
+  ansible.builtin.apt_repository:
+    repo: >
+      deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg]
+      https://download.docker.com/linux/ubuntu jammy stable
+    state: present
+    filename: docker
+  become: true
+
+- name: Install Docker Engine
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+  become: true
+  notify: Start Docker
+
+- name: Start and enable Docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+  become: true
+
+- name: Add azureuser to docker group
+  ansible.builtin.user:
+    name: azureuser
+    groups: docker
+    append: true
+  become: true
+
+- name: Add appuser to docker group
+  ansible.builtin.user:
+    name: appuser
+    groups: docker
+    append: true
+  become: true
+
+- name: Verify Docker is working
+  ansible.builtin.command: docker --version
+  register: docker_ver
+  changed_when: false
+
+- name: Print Docker version
+  ansible.builtin.debug:
+    msg: "✅ {{ docker_ver.stdout }}"

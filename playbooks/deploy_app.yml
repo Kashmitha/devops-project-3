@@ -1,0 +1,122 @@
+---
+- name: Deploy Flask Application via Docker
+  hosts: webserver
+  gather_facts: false
+  become: true
+
+  vars:
+    app_dir: /opt/app
+    flask_app_code: |
+      from flask import Flask, jsonify
+      import platform, os
+
+      app = Flask(__name__)
+
+      @app.route('/')
+      def home():
+          return jsonify({
+              "message": "Hello from DevOps Project 3!",
+              "host": platform.node(),
+              "managed_by": "Ansible Core 2.20",
+              "container": os.environ.get('HOSTNAME', 'unknown'),
+              "status": "running"
+          })
+
+      @app.route('/health')
+      def health():
+          return jsonify({"status": "healthy"})
+
+      if __name__ == '__main__':
+          app.run(host='0.0.0.0', port=5000)
+
+  tasks:
+    - name: Ensure app directory exists
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: appuser
+        group: appuser
+        mode: '0755'
+
+    - name: Deploy Flask application code
+      ansible.builtin.copy:
+        content: "{{ flask_app_code }}"
+        dest: "{{ app_dir }}/app.py"
+        owner: appuser
+        group: appuser
+        mode: '0644'
+
+    - name: Create requirements.txt for Flask app
+      ansible.builtin.copy:
+        content: |
+          flask==3.1.0
+          flask-cors==5.0.1
+        dest: "{{ app_dir }}/requirements.txt"
+        owner: appuser
+        group: appuser
+        mode: '0644'
+
+    - name: Create Dockerfile for the app
+      ansible.builtin.copy:
+        content: |
+          FROM python:3.12-slim
+          WORKDIR /app
+          COPY requirements.txt .
+          RUN pip install --no-cache-dir -r requirements.txt
+          COPY app.py .
+          EXPOSE 5000
+          CMD ["python", "app.py"]
+        dest: "{{ app_dir }}/Dockerfile"
+        owner: appuser
+        group: appuser
+        mode: '0644'
+
+    - name: Stop existing container if running
+      ansible.builtin.command: docker rm -f "{{ app_container_name }}"
+      ignore_errors: true
+      changed_when: false
+
+    - name: Build Docker image for the app
+      ansible.builtin.command:
+        cmd: docker build -t "{{ app_container_name }}:{{ app_version }}" .
+        chdir: "{{ app_dir }}"
+      register: build_output
+      changed_when: "'Successfully built' in build_output.stdout or 'writing image' in build_output.stdout"
+
+    - name: Run the Flask app container
+      ansible.builtin.command: >
+        docker run -d
+        --name {{ app_container_name }}
+        --restart unless-stopped
+        -p {{ app_port }}:5000
+        {{ app_container_name }}:{{ app_version }}
+      register: run_output
+
+    - name: Wait for container to be ready
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ app_port }}"
+        timeout: 30
+
+    - name: Test app is responding (via localhost)
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ app_port }}/"
+        method: GET
+        status_code: 200
+      register: app_response
+
+    - name: Test app via Nginx reverse proxy
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:80/"
+        method: GET
+        status_code: 200
+
+    - name: Print deployment success
+      ansible.builtin.debug:
+        msg:
+          - "============================================"
+          - "✅ Application deployed successfully!"
+          - "Container  : {{ app_container_name }}"
+          - "Version    : {{ app_version }}"
+          - "Response   : {{ app_response.json }}"
+          - "============================================"

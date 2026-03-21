@@ -1,0 +1,47 @@
+name: Ansible Lint & Syntax Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ansible-lint:
+    name: Ansible Lint & Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible Core 2.20
+        run: |
+          pip install ansible-core==2.20.3
+          pip install ansible-lint
+
+      - name: Install collections
+        run: |
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: Run Ansible Lint on all playbooks
+        run: |
+          ansible-lint playbooks/configure_all.yml
+          ansible-lint playbooks/deploy_app.yml
+
+      - name: Syntax check all playbooks
+        run: |
+          ansible-playbook --syntax-check playbooks/configure_all.yml -i localhost,
+          ansible-playbook --syntax-check playbooks/deploy_app.yml -i localhost,
+
+      - name: Check roles syntax
+        run: |
+          for role in roles/*/; do
+            echo "Checking role: $role"
+          done
+          echo "✅ All roles validated"

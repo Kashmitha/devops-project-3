@@ -1,0 +1,53 @@
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: "{{ nginx_package }}"
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure Nginx is running and enabled
+  ansible.builtin.service:
+    name: "{{ nginx_service }}"
+    state: started
+    enabled: true
+  become: true
+
+- name: Remove default Nginx site
+  ansible.builtin.file:
+    path: "{{ nginx_sites_enabled }}/default"
+    state: absent
+  become: true
+  notify: Reload Nginx
+
+- name: Deploy Nginx reverse proxy config from template
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ nginx_sites_path }}/{{ app_name }}"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: Reload Nginx
+
+- name: Enable the site (symlink)
+  ansible.builtin.file:
+    src: "{{ nginx_sites_path }}/{{ app_name }}"
+    dest: "{{ nginx_sites_enabled }}/{{ app_name }}"
+    state: link
+  become: true
+  notify: Reload Nginx
+
+- name: Validate nginx configuration
+  ansible.builtin.command: nginx -t
+  become: true
+  register: nginx_test
+  changed_when: false
+
+- name: Print nginx config test result
+  ansible.builtin.debug:
+    msg: "{{ nginx_test.stderr }}"
+
+- name: Print nginx role completed
+  ansible.builtin.debug:
+    msg: "✅ Nginx configured as reverse proxy on port {{ nginx_port }}"

@@ -1,0 +1,26 @@
+---
+- name: Teardown Azure VM and all resources
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - azure.azcollection
+
+  vars:
+    resource_group: "devops-project3-rg"
+
+  tasks:
+    - name: Confirm teardown
+      ansible.builtin.pause:
+        prompt: "⚠️  This will DELETE all Azure resources in {{ resource_group }}. Press ENTER to continue or Ctrl+C to cancel"
+
+    - name: Delete resource group (removes ALL resources inside)
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ resource_group }}"
+        state: absent
+        force_delete_nonempty: true
+      register: delete_result
+
+    - name: Teardown complete
+      ansible.builtin.debug:
+        msg: "✅ Resource group {{ resource_group }} and all resources deleted."

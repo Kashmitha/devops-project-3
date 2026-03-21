@@ -1,0 +1,266 @@
+---
+- name: Provision Azure VM for Ansible Configuration Management
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  collections:
+    - azure.azcollection
+
+  vars:
+    resource_group: "devops-project3-rg"
+    location: "eastus"
+    vnet_name: "project3-vnet"
+    subnet_name: "project3-subnet"
+    nsg_name: "project3-nsg"
+    public_ip_name: "project3-pip"
+    nic_name: "project3-nic"
+    vm_name: "project3-vm"
+    vm_size: "Standard_DC2ads_v5"
+    admin_username: "azureuser"
+    # Path to YOUR private key (no .pub — az vm create reads .pub automatically)
+    ssh_key_path: "{{ lookup('env', 'HOME') }}/.ssh/ansible_project3"
+
+  tasks:
+
+    # ─────────────────────────────────────────────────────
+    # 0. PRE-FLIGHT CHECKS
+    # ─────────────────────────────────────────────────────
+    - name: Check private key exists
+      ansible.builtin.stat:
+        path: "{{ ssh_key_path }}"
+      register: priv_key_stat
+
+    - name: Fail if private key is missing
+      ansible.builtin.fail:
+        msg: >
+          Private key not found at {{ ssh_key_path }}.
+          Run: ssh-keygen -m PEM -t rsa -b 4096 -f ~/.ssh/ansible_project3 -N ""
+      when: not priv_key_stat.stat.exists
+
+    - name: Check public key exists
+      ansible.builtin.stat:
+        path: "{{ ssh_key_path }}.pub"
+      register: pub_key_stat
+
+    - name: Fail if public key is missing
+      ansible.builtin.fail:
+        msg: "Public key not found at {{ ssh_key_path }}.pub"
+      when: not pub_key_stat.stat.exists
+
+    - name: Confirm keys found
+      ansible.builtin.debug:
+        msg:
+          - "✅ Private key : {{ ssh_key_path }}"
+          - "✅ Public key  : {{ ssh_key_path }}.pub"
+
+    # ─────────────────────────────────────────────────────
+    # 1. COPY KEY TO ~/.ssh/id_rsa so --generate-ssh-keys
+    #    picks it up automatically (Azure CLI looks there)
+    # ─────────────────────────────────────────────────────
+    - name: Copy private key to ~/.ssh/id_rsa (Azure CLI default location)
+      ansible.builtin.copy:
+        src: "{{ ssh_key_path }}"
+        dest: "{{ lookup('env', 'HOME') }}/.ssh/id_rsa"
+        mode: '0600'
+        force: true  
+
+    - name: Copy public key to ~/.ssh/id_rsa.pub (Azure CLI default location)
+      ansible.builtin.copy:
+        src: "{{ ssh_key_path }}.pub"
+        dest: "{{ lookup('env', 'HOME') }}/.ssh/id_rsa.pub"
+        mode: '0644'
+        force: true       
+
+    # ─────────────────────────────────────────────────────
+    # 2. NETWORKING
+    # ─────────────────────────────────────────────────────
+    - name: Create Resource Group
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ resource_group }}"
+        location: "{{ location }}"
+        tags:
+          Project: "devops-project-3"
+          ManagedBy: "Ansible"
+          Environment: "dev"
+
+    - name: Create Virtual Network
+      azure.azcollection.azure_rm_virtualnetwork:
+        resource_group: "{{ resource_group }}"
+        name: "{{ vnet_name }}"
+        address_prefixes: "10.0.0.0/16"
+
+    - name: Create Subnet
+      azure.azcollection.azure_rm_subnet:
+        resource_group: "{{ resource_group }}"
+        name: "{{ subnet_name }}"
+        address_prefix: "10.0.1.0/24"
+        virtual_network: "{{ vnet_name }}"
+
+    - name: Create Network Security Group
+      azure.azcollection.azure_rm_securitygroup:
+        resource_group: "{{ resource_group }}"
+        name: "{{ nsg_name }}"
+        rules:
+          - name: AllowSSH
+            protocol: Tcp
+            destination_port_range: 22
+            access: Allow
+            priority: 1001
+            direction: Inbound
+          - name: AllowHTTP
+            protocol: Tcp
+            destination_port_range: 80
+            access: Allow
+            priority: 1002
+            direction: Inbound
+          - name: AllowHTTPS
+            protocol: Tcp
+            destination_port_range: 443
+            access: Allow
+            priority: 1003
+            direction: Inbound
+          - name: AllowApp
+            protocol: Tcp
+            destination_port_range: 5000
+            access: Allow
+            priority: 1004
+            direction: Inbound
+
+    - name: Create Public IP (Static)
+      azure.azcollection.azure_rm_publicipaddress:
+        resource_group: "{{ resource_group }}"
+        allocation_method: Static
+        name: "{{ public_ip_name }}"
+        sku: Standard
+
+    - name: Create NIC
+      azure.azcollection.azure_rm_networkinterface:
+        resource_group: "{{ resource_group }}"
+        name: "{{ nic_name }}"
+        virtual_network: "{{ vnet_name }}"
+        subnet: "{{ subnet_name }}"
+        security_group: "{{ nsg_name }}"
+        ip_configurations:
+          - name: ipconfig1
+            public_ip_address_name: "{{ public_ip_name }}"
+            primary: true
+
+    # ─────────────────────────────────────────────────────
+    # 3. RESOLVE PUBLIC IP (always works, even on re-runs)
+    # ─────────────────────────────────────────────────────
+    - name: Fetch Public IP details
+      azure.azcollection.azure_rm_publicipaddress_info:
+        resource_group: "{{ resource_group }}"
+        name: "{{ public_ip_name }}"
+      register: pip_info
+
+    - name: Set public IP fact
+      ansible.builtin.set_fact:
+        vm_public_ip: "{{ pip_info.publicipaddresses[0].ip_address }}"
+
+    - name: Confirm public IP resolved
+      ansible.builtin.debug:
+        msg: "✅ Public IP: {{ vm_public_ip }}"
+
+    # ─────────────────────────────────────────────────────
+    # 4. CREATE CONFIDENTIAL VM
+    #    Uses --generate-ssh-keys which reads ~/.ssh/id_rsa
+    #    (our key we copied above) — no quoting issues.
+    #    Uses correct Confidential VM compatible image.
+    # ─────────────────────────────────────────────────────
+    - name: Create Confidential VM via Azure CLI
+      ansible.builtin.command:
+        argv:
+          - az
+          - vm
+          - create
+          - --resource-group
+          - "{{ resource_group }}"
+          - --name
+          - "{{ vm_name }}"
+          - --size
+          - "{{ vm_size }}"
+          - --image
+          - "Canonical:0001-com-ubuntu-confidential-vm-jammy:22_04-lts-cvm:latest"
+          - --admin-username
+          - "{{ admin_username }}"
+          - --generate-ssh-keys
+          - --nics
+          - "{{ nic_name }}"
+          - --security-type
+          - "ConfidentialVM"
+          - --os-disk-security-encryption-type
+          - "VMGuestStateOnly"
+          - --enable-vtpm
+          - "true"
+          - --enable-secure-boot
+          - "true"
+          - --os-disk-size-gb
+          - "30"
+          - --storage-sku
+          - "StandardSSD_LRS"
+          - --tags
+          - "Project=devops-project-3"
+          - "ManagedBy=Ansible"
+          - "Role=webserver"
+          - "Environment=dev"
+          - --output
+          - "json"
+      register: vm_cli_output
+
+    - name: Parse VM creation output
+      ansible.builtin.set_fact:
+        vm_result: "{{ vm_cli_output.stdout | from_json }}"
+
+    # ─────────────────────────────────────────────────────
+    # 5. WAIT & VERIFY
+    # ─────────────────────────────────────────────────────
+    - name: Wait for SSH port to be reachable
+      ansible.builtin.wait_for:
+        host: "{{ vm_public_ip }}"
+        port: 22
+        timeout: 300
+        delay: 15
+        msg: "Waiting for SSH on {{ vm_public_ip }}:22 ..."
+
+    - name: Test SSH connectivity
+      ansible.builtin.command:
+        argv:
+          - ssh
+          - -i
+          - "{{ ssh_key_path }}"
+          - -o
+          - StrictHostKeyChecking=no
+          - -o
+          - ConnectTimeout=10
+          - "{{ admin_username }}@{{ vm_public_ip }}"
+          - echo
+          - "SSH OK"
+      register: ssh_test
+      changed_when: false
+
+    - name: Print SSH test result
+      ansible.builtin.debug:
+        msg: "✅ SSH test: {{ ssh_test.stdout }}"
+
+    # ─────────────────────────────────────────────────────
+    # 6. SAVE & SUMMARISE
+    # ─────────────────────────────────────────────────────
+    - name: Save public IP to vm_ip.txt
+      ansible.builtin.copy:
+        content: "{{ vm_public_ip }}"
+        dest: "./vm_ip.txt"
+        mode: '0644'
+
+    - name: Final summary
+      ansible.builtin.debug:
+        msg:
+          - "============================================"
+          - "✅ VM provisioned successfully!"
+          - "VM Name    : {{ vm_name }}"
+          - "VM Size    : {{ vm_size }}"
+          - "Image      : Ubuntu 22.04 Confidential VM"
+          - "Security   : ConfidentialVM + vTPM + SecureBoot"
+          - "Public IP  : {{ vm_public_ip }}"
+          - "SSH Cmd    : ssh -i {{ ssh_key_path }} {{ admin_username }}@{{ vm_public_ip }}"
+          - "============================================"

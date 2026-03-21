@@ -1,0 +1,9 @@
+*.retry
+*.log
+vm_ip.txt
+.env
+__pycache__/
+*.pyc
+.vagrant/
+*.swp
+.DS_Store
