@@ -44,4 +44,4 @@ ansible-playbook playbooks/teardown.yml
 - Security hardening automation
 
 ## Author
-Kashmitha Madushan — DevOps Engineer (Intern)
+Kashmitha Madushan Gamini— DevOps Engineer (Intern)
