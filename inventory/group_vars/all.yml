@@ -7,4 +7,4 @@ ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
 # App configuration
 app_name: devops-flask-app
 app_port: 5000
-app_version: "1.0.0"
+app_version: "1.1.0"
