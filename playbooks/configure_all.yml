@@ -1,6 +1,7 @@
+cat > playbooks/configure_all.yml << 'EOF'
 ---
 - name: Full Server Configuration — DevOps Project 3
-  hosts: webserver
+  hosts: webservers
   gather_facts: true
   become: true
 
@@ -25,12 +26,12 @@
 
     - name: Assert Nginx service is active
       ansible.builtin.assert:
-        that: 
+        that:
           - "'nginx' in services"
           - "services['nginx'].state == 'running'"
         success_msg: "✅ Nginx is running"
         fail_msg: "❌ Nginx is NOT running — check the logs"
-    
+
     - name: Verify Docker is running
       ansible.builtin.assert:
         that:
@@ -49,4 +50,4 @@
           - "Docker   : Running"
           - "Security : UFW + fail2ban active"
           - "============================================"
-
+EOF
