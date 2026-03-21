@@ -73,8 +73,9 @@
 
     - name: Stop existing container if running
       ansible.builtin.command: docker rm -f "{{ app_container_name }}"
-      ignore_errors: true
-      changed_when: false
+      register: stop_result
+      failed_when: stop_result.rc != 0 and 'No such container' not in stop_result.stderr
+      changed_when: stop_result.rc == 0
 
     - name: Build Docker image for the app
       ansible.builtin.command:
@@ -91,6 +92,7 @@
         -p {{ app_port }}:5000
         {{ app_container_name }}:{{ app_version }}
       register: run_output
+      changed_when: run_output.rc == 0
 
     - name: Wait for container to be ready
       ansible.builtin.wait_for:
