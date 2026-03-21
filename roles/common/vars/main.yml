@@ -1,4 +1,3 @@
-cat > roles/common/vars/main.yml << 'EOF'
 ---
 common_required_packages:
   - curl
@@ -15,4 +14,3 @@ common_required_packages:
   - ufw
   - fail2ban
   - apt-transport-https
-EOF
